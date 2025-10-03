@@ -1,44 +1,11 @@
-/*********************************************************************
- * Software License Agreement (BSD License)
- *
- *  Copyright (c) 2024, Metro Robots
- *  All rights reserved.
- *
- *  Redistribution and use in source and binary forms, with or without
- *  modification, are permitted provided that the following conditions
- *  are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above
- *     copyright notice, this list of conditions and the following
- *     disclaimer in the documentation and/or other materials provided
- *     with the distribution.
- *   * Neither the name of Metro Robots nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- *  POSSIBILITY OF SUCH DAMAGE.
- *********************************************************************/
-
-/* Author: David V. Lu!! */
-
 #include <QVBoxLayout>
 #include <rviz_common/display_context.hpp>
 #include <rviz_panel_tutorial/demo_panel.hpp>
+#include <geometry_msgs/msg/twist.hpp>
+#include <QTimer>
 
-namespace rviz_panel_tutorial
+
+namespace turtlesim_reset
 {
 DemoPanel::DemoPanel(QWidget * parent) : Panel(parent)
 {
@@ -48,6 +15,9 @@ DemoPanel::DemoPanel(QWidget * parent) : Panel(parent)
   button_ = new QPushButton("GO!");
   layout->addWidget(label_);
   layout->addWidget(button_);
+  timer_ = new QTimer(this);
+  connect(timer_, &QTimer::timeout, this, &DemoPanel::moveTowardsTarget);
+
 
   // Connect the event of when the button is released to our callback,
   // so pressing the button results in the callback being called.
@@ -65,28 +35,70 @@ void DemoPanel::onInitialize()
   // Get a pointer to the familiar rclcpp::Node for making subscriptions/publishers
   // (as per normal rclcpp code)
   rclcpp::Node::SharedPtr node = node_ptr_->get_raw_node();
-  publisher_ = node->create_publisher<std_msgs::msg::String>("/output", 10);
-  subscription_ = node->create_subscription<std_msgs::msg::String>(
-      "/input", 10, std::bind(&DemoPanel::topicCallback, this, std::placeholders::_1));
+  pose_sub_ = node->create_subscription<turtlesim::msg::Pose>(
+        "/turtle1/pose", 10,
+        std::bind(&DemoPanel::poseCallback, this, std::placeholders::_1));
+  cmd_vel_pub_ = node->create_publisher<geometry_msgs::msg::Twist>(
+    "/turtle1/cmd_vel", 10);
+      
 }
+void DemoPanel::moveTowardsTarget()
+{
+    auto msg = geometry_msgs::msg::Twist();
+
+    double dx = target_x_ - current_x_; // current_x_ aggiornato in poseCallback
+    double dy = target_y_ - current_y_;
+    double distance = std::sqrt(dx*dx + dy*dy);
+
+    if (distance < 0.1) {
+        timer_->stop();
+        cmd_vel_pub_->publish(msg); // Twist zero = fermo
+        label_->setText("Target reached!");
+        return;
+    }
+
+    double angle_to_goal = std::atan2(dy, dx);
+    double angle_error = angle_to_goal - current_theta_;
+
+    msg.linear.x = 1.0;
+    msg.angular.z = 2.0 * angle_error;
+
+    cmd_vel_pub_->publish(msg);
+}
+
 
 // When the subscriber gets a message, this callback is triggered,
 // and then we copy its data into the widget's label
-void DemoPanel::topicCallback(const std_msgs::msg::String& msg)
+
+void DemoPanel::poseCallback(const turtlesim::msg::Pose::SharedPtr msg)
 {
-  label_->setText(QString(msg.data.c_str()));
+    double x = msg->x;
+    double y = msg->y;
+    double theta = msg->theta;
+
+    current_x_ = x;
+    current_y_ = y;
+    current_theta_ = theta;
+
+    QString s = QString("x: %1, y: %2, θ: %3").arg(x, 0, 'f', 2).arg(y, 0, 'f', 2).arg(theta, 0, 'f', 2);
+
+    QMetaObject::invokeMethod(label_, "setText", Qt::QueuedConnection,
+                              Q_ARG(QString, s));
 }
+
+
 
 // When the widget's button is pressed, this callback is triggered,
 // and then we publish a new message on our topic.
 void DemoPanel::buttonActivated()
 {
-  auto message = std_msgs::msg::String();
-  message.data = "Button clicked!";
-  publisher_->publish(message);
+ 
+   timer_->start(100); // chiama moveTowardsTarget() ogni 100 ms
+    label_->setText("Moving turtle...");
+
 }
 
 }  // namespace rviz_panel_tutorial
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(rviz_panel_tutorial::DemoPanel, rviz_common::Panel)
+PLUGINLIB_EXPORT_CLASS(turtlesim_reset::DemoPanel, rviz_common::Panel)

@@ -1,0 +1,13 @@
+# ROS2 build, install, log folders
+build/
+install/
+log/
+
+# VSCode specific
+.vscode/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+*.swp

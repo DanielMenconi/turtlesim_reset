@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(rviz_panel_tutorial)
+project(turtlesim_reset)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -9,6 +9,8 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rviz_common REQUIRED)
+find_package(turtlesim REQUIRED)
+
 
 set(CMAKE_AUTOMOC ON)
 qt5_wrap_cpp(MOC_FILES
@@ -23,7 +25,12 @@ target_include_directories(demo_panel PUBLIC
 ament_target_dependencies(demo_panel
   pluginlib
   rviz_common
+  rclcpp
+  turtlesim
+  geometry_msgs
 )
+
+
 install(TARGETS demo_panel
         EXPORT export_rviz_panel_tutorial
         ARCHIVE DESTINATION lib
@@ -41,6 +48,6 @@ install(FILES icons/classes/DemoPanel.png
 )
 ament_export_include_directories(include)
 ament_export_targets(export_rviz_panel_tutorial)
-pluginlib_export_plugin_description_file(rviz_common rviz_common_plugins.xml)
+pluginlib_export_plugin_description_file(rviz_common turtlesim_reset_plugins.xml)
 
 ament_package()
